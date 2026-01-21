@@ -27,8 +27,8 @@ void addfd(int epollfd,int fd,bool one_shot)
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;//新连接，新数据，断连接，ET 模式
     if(one_shot)event.events |= EPOLLONESHOT; 
-    epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&event); //加入列表需要说明需要监听的事件
     setnonblocking(fd); //使用 epoll ，socket 相关函数必须非阻塞，只需要 epoll_wait 一个阻塞即一个监听
+    epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&event); //加入列表需要说明需要监听的事件
 }
 
 int main(int argc, char const *argv[])
