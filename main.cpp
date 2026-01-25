@@ -6,10 +6,13 @@
 #include "thread_pool.h"
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include "HttpConn.h"
 
 using namespace std;
 
 constexpr int MAX_EVENT_NUMBER = 10000;
+const int MAX_FD = 65536;
+HttpConn* users = new HttpConn[MAX_FD]; //保存所有的 http 连接
 
 //设置socket 非阻塞
 void setnonblocking(int fd)
@@ -51,8 +54,8 @@ int main(int argc, char const *argv[])
     int epollfd = epoll_create(5);
     addfd(epollfd,listenfd,false); // 监听socket 不用 ONESHOT 否则只能
     epoll_event event[MAX_EVENT_NUMBER];
-    //创建线程池
-    ThreadPool thread_pool(epollfd);
+    //创建 HttpConn 线程池
+    ThreadPool<HttpConn> thread_pool(8);
     //死循环，处理新连接     
     while(1)
     {
@@ -62,18 +65,19 @@ int main(int argc, char const *argv[])
         for(int i = 0;i<num;++i)
         {
             int fd = event[i].data.fd;
-            if(fd==listenfd){
+            if(fd==listenfd){ //新连接
                 while(true){
                     int confd = accept(listenfd,nullptr,nullptr);
-                    if(confd<0){
+                    if(confd<0){//没有新连接了
                         if(errno!=EAGAIN && errno!=EWOULDBLOCK)perror("accept error");
                         break;
                     }
                     addfd(epollfd,confd,true); //加入监听链表
+                    users[confd].init(confd,epollfd); //初始化 http 连接
                 }
                 
-            }else{
-                thread_pool.append(fd); //追加到任务列表
+            }else{ //已有连接
+                thread_pool.append(&users[fd]); //追加到任务列表
             }
         }
     }
