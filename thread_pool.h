@@ -56,8 +56,8 @@ private:
              //处理任务
             task->process();
             //输出提示
-            pthread_t tid = pthread_self();
-            cout<<"tid = "<<tid<<endl;
+            // pthread_t tid = pthread_self();
+            // cout<<"tid = "<<tid<<endl;
         }
     }
 
