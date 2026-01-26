@@ -25,6 +25,7 @@
             m_check_state = CHECK_STATE_REQUESTLINE;
             m_checked_idx = 0;
             m_read_idx = 0;
+            m_start_line = 0;
             memset(m_read_buf,0,sizeof(m_read_buf));
         };
         void process(){
@@ -35,7 +36,11 @@
                 close(m_sockfd);
                 return;
            }
-           printf("读取到数据：\n%s\n",m_read_buf);
+           //解析行
+           while(parse_line()==LINE_OK){
+                printf("解析出一行：%s\n",getline());
+                m_start_line = m_checked_idx;//下一行的起始位置 = 当前检查的位置
+           }
             //写 
             const char* response = "HTTP/1.1 200 OK\r\nContent-Length: 19\r\n\r\n<h1>Hello World</h1>";
             write(m_sockfd,response,strlen(response));
@@ -68,11 +73,41 @@
             }
             return true;
         }
+        //行解析的状态
+        enum LINE_STATUS{LINE_OK = 0,LINE_BAD,LINE_OPEN};
+        LINE_STATUS parse_line(){
+            for(;m_checked_idx<m_read_idx;++m_checked_idx){//循环检查
+                char temp = m_read_buf[m_checked_idx];//当前检查到的字符
+                if(temp=='\r'){
+                    if(m_checked_idx+1==m_read_idx){//最后一个字符是 '\r'
+                        return LINE_OPEN;
+                    }
+                    if(m_read_buf[m_checked_idx+1]=='\n'){//'\r''\n'完整
+                        m_read_buf[m_checked_idx++] = '\0';
+                        m_read_buf[m_checked_idx++] = '\0';
+                        return LINE_OK;
+                    }
+                }else if(temp=='\n'){
+                    if(m_checked_idx>=1 && m_read_buf[m_checked_idx-1]=='\r'){//上次读到 '\r' 断掉
+                        m_read_buf[m_checked_idx-1] = '\0';
+                        m_read_buf[m_checked_idx++] = '\0';
+                        return LINE_OK;
+                    }
+                    return LINE_BAD;
+                }
+            }
+            return LINE_OPEN; //没找到 '\r''\n'
+        }
+        //获取行开始位置的指针
+        char* getline(){return m_read_buf+m_start_line;}
+
+        
         int m_sockfd; 
         int m_epollfd;
         char m_read_buf[READ_BUFFER_SIZE];
         CHECK_STATE m_check_state;
         int m_read_idx;
         int m_checked_idx;
+        int m_start_line;
     };
 
