@@ -3,10 +3,12 @@
 void HttpConn::init(int sockfd,int epollfd){
         m_socket_fd = sockfd;
         m_epoll_fd = epollfd;
-        m_parse_stage = PARSE_STAGE_REQUESTLINE;
+        m_parse_stage = PARSE_STAGE::REQUEST_LINE;
         m_parse_idx = 0;
         m_read_idx = 0;
         m_line_start_idx = 0;
+        m_keep_alive = false;
+        m_content_length = 0;
         memset(m_read_buf,0,sizeof(m_read_buf));
 };
 
@@ -47,28 +49,33 @@ bool HttpConn::recv_to_buffer(){
 
 //解析请求
 HttpConn::PARSE_RESULT HttpConn::parse_request(){
-    LINE_STATUS line_status = LINE_STATUS::OK;
-    while(parse_one_line()==LINE_STATUS::OK){//解析每一行
-        char* text = get_line();//获取行指针
-        line_done();//更新行指针
+    char* text = nullptr;
+    LINE_RESULT line_result = LINE_RESULT::OK;
+    PARSE_RESULT ret = PARSE_RESULT::OK;
+    while((m_parse_stage==PARSE_STAGE::CONTENT && line_result==LINE_RESULT::OK) || //循环解析并处理每一行
+               (line_result = parse_one_line())==LINE_RESULT::OK){
+        text = get_line();//获取行指针
+        line_done();        //更新行指针
         switch (m_parse_stage){//根据解析阶段解析
         case PARSE_STAGE::REQUEST_LINE://请求行
-            if(PARSE_RESULT::SYNTAX_ERROR==parse_request_line(text)){
-                return PARSE_RESULT::SYNTAX_ERROR;
-            }
+            ret = parse_request_line(text);
+            if(ret!=PARSE_RESULT::OK)return ret;
             break;
         case PARSE_STAGE::HEADER://请求头
-            parse_header(text);
+            ret = parse_header(text);
+            if(ret!=PARSE_RESULT::OK)return ret;
             break;
         case PARSE_STAGE::CONTENT://请求体
-            parse_content(text);
+            if(m_content_length==0)return ret;
+            ret = parse_content(text);
+            if(ret!=PARSE_RESULT::OK)return ret;
             break;
         default:
+            return PARSE_RESULT::INTERNAL_ERROR;
             break;
         }
     }
-    //处理文件
-    process_file();
+    return  line_result==LINE_RESULT::INCOMPLETE?PARSE_RESULT::INCOMPLETE:PARSE_RESULT::SYNTAX_ERROR;
 };
 
   //发送响应
@@ -87,28 +94,28 @@ void HttpConn::reset_oneshot(int epollfd,int fd){
 }
 
 //解析出一行
-HttpConn::LINE_STATUS HttpConn::parse_one_line(){
+HttpConn::LINE_RESULT HttpConn::parse_one_line(){
     for(;m_parse_idx<m_read_idx;++m_parse_idx){//循环检查
         char temp = m_read_buf[m_parse_idx];//当前检查到的字符
         if(temp=='\r'){
             if(m_parse_idx+1==m_read_idx){//最后一个字符是 '\r'
-                return LINE_STATUS::INCOMPLETE;
+                return LINE_RESULT::INCOMPLETE;
             }
             if(m_read_buf[m_parse_idx+1]=='\n'){//'\r''\n'完整
                 m_read_buf[m_parse_idx++] = '\0';
                 m_read_buf[m_parse_idx++] = '\0';
-                return LINE_STATUS::OK;
+                return LINE_RESULT::OK;
             }
         }else if(temp=='\n'){
             if(m_parse_idx>=1 && m_read_buf[m_parse_idx-1]=='\r'){//上次读到 '\r' 断掉
                 m_read_buf[m_parse_idx-1] = '\0';
                 m_read_buf[m_parse_idx++] = '\0';
-                return LINE_STATUS::OK;
+                return LINE_RESULT::OK;
             }
-            return LINE_STATUS::BAD;
+            return LINE_RESULT::SYTAX_ERROR;
         }
     }
-    return LINE_STATUS::INCOMPLETE; //没找到 '\r''\n'
+    return LINE_RESULT::INCOMPLETE; //没找到 '\r''\n'
 }
 
 //解析请求行
@@ -152,7 +159,37 @@ HttpConn::PARSE_RESULT HttpConn::parse_request_line(char* text){
 
 //解析请求头
 HttpConn::PARSE_RESULT HttpConn::parse_header(char* text){
-    
+    //判断空行
+    if(text[0]=='\0'){
+        m_parse_stage = PARSE_STAGE::CONTENT;
+        return PARSE_RESULT::OK;
+    }
+    //具体 header 字段
+    if(strncasecmp(text,"Connection:",11)==0){
+        text += 11;
+        text += strspn(text," \t");
+        if(strcasecmp(text,"keep-alive")==0){
+            m_keep_alive = true;
+        }
+    }else if(strncasecmp(text,"Content-Length:",15)==0){
+        text += 15;
+        text += strspn(text," \t");
+        m_content_length = atoll(text); //暂不考虑正整数以外情况
+    }else if(strncasecmp(text,"Host:",5)==0){
+        text += 5;
+        text += strspn(text," \t");
+        m_host = text;
+    }else{//其他字段，暂不考虑
+
+    }
+    return PARSE_RESULT::OK;
 }
 
-
+//解析请求体
+HttpConn::PARSE_RESULT HttpConn::parse_content(char* text){
+    if(m_read_idx>=m_parse_idx+m_content_length){
+        m_parse_idx += m_content_length;
+        return PARSE_RESULT::OK;
+    }
+    return PARSE_RESULT::INCOMPLETE;
+}
