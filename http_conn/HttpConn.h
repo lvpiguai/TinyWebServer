@@ -17,7 +17,6 @@ public:
     enum class PARSE_RESULT{
         OK,                   //合法
         INCOMPLETE,//请求不完整，需继续接受数据
-        INTERNAL_ERROR, // 内部出错
         SYNTAX_ERROR    // 语法错误
     };
     
@@ -29,7 +28,7 @@ private:
 //process 调用
     bool recv_to_buffer();//读数据到 m_read_buf 中
     PARSE_RESULT parse_request();//解析请求
-    void generate_response();//创建响应
+    void generate_response(int status_code);//创建响应
     void send_response();//发送响应
     void reset_oneshot(int epoll_fd,int socket_fd);//重置 oneshot 事件
     

@@ -20,17 +20,30 @@ void HttpConn::process(){
         close(m_socket_fd);//读取失败关闭连接
         return;
     }
+
     //解析请求
     PARSE_RESULT parse_ret = parse_request();
-    if(parse_ret==PARSE_RESULT::OK){   
-        generate_response();//创建响应
+
+    //根据解析结果创建发送响应或继续等待
+    if(parse_ret==PARSE_RESULT::INCOMPLETE){//未完成
+        reset_oneshot(m_epoll_fd, m_socket_fd);
+        return;
+    }else if(parse_ret==PARSE_RESULT::OK){   //成功
+        generate_response(200);
+    }else{  //语法错误
+        generate_response(400);
     }
 
     //发送响应
     send_response();
-    
-    //重置 ONESHOT
-    reset_oneshot(m_epoll_fd,m_socket_fd);
+
+    //重置 ONESHOT 或 关闭连接
+    if(parse_ret==PARSE_RESULT::OK){   //成功
+        reset_oneshot(m_epoll_fd,m_socket_fd);
+    }else{  //语法错误
+        close(m_socket_fd);
+    }
+   
 };
 
 //读数据到 m_read_buf 中
@@ -74,7 +87,6 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
             return parse_content(text);
             break;
         default:
-            return PARSE_RESULT::INTERNAL_ERROR;
             break;
         }
     }
@@ -82,17 +94,32 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
 };
 
 //创建响应
-void HttpConn::generate_response(){
-    const char* body = "<h1>Hi! This is TinyWebServer!</h1>";
+void HttpConn::generate_response(int status_code){
+    const char* status_msg;
+    const char* content;
+    switch(status_code){
+        case 200:
+            status_msg = "OK";
+            content = "<h1>Hi! This is TinyWebServer!</h1>";
+            break;
+        case 400:
+            status_msg = "Bad Request";
+            content = "<h1>Your request has syntax error.</h1>";
+            break;
+        default:
+            status_msg = "Internal Error";
+            content = "<h1>Something went wrong.</h1>";
+            break;
+    }
     const char*  conn = m_keep_alive?"keep-alive":"close";
 
     int len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
-        "%s 200 OK\r\n"
+        "%s %d %s\r\n"
         "Content-Type: text/html; charset=utf-8\r\n"
-        "Content-Length: %zu"
+        "Content-Length: %zu\r\n"
         "Connection: %s\r\n\r\n"
         "%s"
-        ,m_version,strlen(body),conn,body);
+        ,m_version,status_code,status_msg,strlen(content),conn,content);
     
     m_write_idx += len;
 }
