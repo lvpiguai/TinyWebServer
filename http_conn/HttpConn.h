@@ -29,6 +29,7 @@ private:
 //process 调用
     bool recv_to_buffer();//读数据到 m_read_buf 中
     PARSE_RESULT parse_request();//解析请求
+    void generate_response();//创建响应
     void send_response();//发送响应
     void reset_oneshot(int epoll_fd,int socket_fd);//重置 oneshot 事件
     
@@ -44,6 +45,7 @@ private:
 
 //成员变量
     static constexpr int READ_BUFFER_SIZE = 2048;
+    static constexpr int WRITE_BUFFER_SIZE = 2048;
     int m_socket_fd; 
     int m_epoll_fd;
     char m_read_buf[READ_BUFFER_SIZE];
@@ -58,5 +60,8 @@ private:
     bool m_keep_alive;
     long long m_content_length;
     char* m_host;
+    char* m_content;
+    char m_write_buf[WRITE_BUFFER_SIZE];
+    int m_write_idx;
 };
 

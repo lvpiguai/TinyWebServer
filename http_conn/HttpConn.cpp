@@ -6,24 +6,28 @@ void HttpConn::init(int sockfd,int epollfd){
         m_parse_stage = PARSE_STAGE::REQUEST_LINE;
         m_parse_idx = 0;
         m_read_idx = 0;
+        m_write_idx = 0;
         m_line_start_idx = 0;
         m_keep_alive = false;
         m_content_length = 0;
         memset(m_read_buf,0,sizeof(m_read_buf));
+        memset(m_write_buf,0,sizeof(m_read_buf));
 };
 
 void HttpConn::process(){
-    //读请求
-    if(false==recv_to_buffer()){
-        close(m_socket_fd);
+    //读
+    if(!recv_to_buffer()){
+        close(m_socket_fd);//读取失败关闭连接
         return;
     }
     //解析请求
-    parse_request();
+    PARSE_RESULT parse_ret = parse_request();
+    if(parse_ret==PARSE_RESULT::OK){   
+        generate_response();//创建响应
+    }
 
     //发送响应
     send_response();
-
     
     //重置 ONESHOT
     reset_oneshot(m_epoll_fd,m_socket_fd);
@@ -67,8 +71,7 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
             break;
         case PARSE_STAGE::CONTENT://请求体
             if(m_content_length==0)return ret;
-            ret = parse_content(text);
-            if(ret!=PARSE_RESULT::OK)return ret;
+            return parse_content(text);
             break;
         default:
             return PARSE_RESULT::INTERNAL_ERROR;
@@ -78,11 +81,25 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
     return  line_result==LINE_RESULT::INCOMPLETE?PARSE_RESULT::INCOMPLETE:PARSE_RESULT::SYNTAX_ERROR;
 };
 
-  //发送响应
+//创建响应
+void HttpConn::generate_response(){
+    const char* body = "<h1>Hi! This is TinyWebServer!</h1>";
+    const char*  conn = m_keep_alive?"keep-alive":"close";
+
+    int len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
+        "%s 200 OK\r\n"
+        "Content-Type: text/html; charset=utf-8\r\n"
+        "Content-Length: %zu"
+        "Connection: %s\r\n\r\n"
+        "%s"
+        ,m_version,strlen(body),conn,body);
+    
+    m_write_idx += len;
+}
+
+//发送响应
 void HttpConn::send_response(){
-    //写 
-    const char* response = "HTTP/1.1 200 OK\r\nContent-Length: 19\r\n\r\n<h1>Hello World</h1>";
-    write(m_socket_fd,response,strlen(response));    
+    write(m_socket_fd,m_write_buf,strlen(m_write_buf));    
 }
 
 //重置 oneshot 事件
@@ -187,7 +204,9 @@ HttpConn::PARSE_RESULT HttpConn::parse_header(char* text){
 
 //解析请求体
 HttpConn::PARSE_RESULT HttpConn::parse_content(char* text){
-    if(m_read_idx>=m_parse_idx+m_content_length){
+    if(m_read_idx>=m_parse_idx+m_content_length){//长度包含请求体
+        text[m_content_length] = '\0'; //主动设置结束
+        m_content = text;
         m_parse_idx += m_content_length;
         return PARSE_RESULT::OK;
     }
