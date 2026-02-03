@@ -1,4 +1,8 @@
 #include "HttpConn.h"
+#include <sys/uio.h>
+#include<sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 void HttpConn::init(int sockfd,int epollfd){
         m_socket_fd = sockfd;
@@ -29,7 +33,8 @@ void HttpConn::process(){
         reset_oneshot(m_epoll_fd, m_socket_fd);
         return;
     }else if(parse_ret==PARSE_RESULT::OK){   //成功
-        generate_response(200);
+        int status_code = do_request();
+        generate_response(status_code);
     }else{  //语法错误
         generate_response(400);
     }
@@ -93,6 +98,32 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
     return  line_result==LINE_RESULT::INCOMPLETE?PARSE_RESULT::INCOMPLETE:PARSE_RESULT::SYNTAX_ERROR;
 };
 
+//处理请求
+int HttpConn::do_request(){
+    //拼接绝对路径
+    strcpy(m_full_path,doc_root);
+    if(strcmp(m_url,"/")==0){
+        strcat(m_full_path,"/index.html");
+    }else{
+        strcat(m_full_path,m_url);
+    }
+    //检查文件状态
+    if(stat(m_full_path,&m_file_stat)<0){
+        perror("file not found");
+        return 404;
+    }
+    //获取文件 fd 
+    int fd = open(m_full_path,O_RDONLY);
+    if(fd<0){
+        perror("open file failed");
+    }
+    //映射文件到内存
+    m_file_address = (char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
+    
+    return 200;
+}
+
+
 //创建响应
 void HttpConn::generate_response(int status_code){
     const char* status_msg;
@@ -126,7 +157,12 @@ void HttpConn::generate_response(int status_code){
 
 //发送响应
 void HttpConn::send_response(){
-    write(m_socket_fd,m_write_buf,strlen(m_write_buf));    
+    iovec iv[2];
+    iv[0].iov_base = m_write_buf;
+    iv[0].iov_len = m_write_idx;
+    iv[1].iov_base = m_file_address;
+    iv[1].iov_len = m_file_stat.st_size;
+    writev(m_socket_fd,iv,2);
 }
 
 //重置 oneshot 事件

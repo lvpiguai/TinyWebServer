@@ -28,6 +28,7 @@ private:
 //process 调用
     bool recv_to_buffer();//读数据到 m_read_buf 中
     PARSE_RESULT parse_request();//解析请求
+    int do_request(); //处理请求
     void generate_response(int status_code);//创建响应
     void send_response();//发送响应
     void reset_oneshot(int epoll_fd,int socket_fd);//重置 oneshot 事件
@@ -62,5 +63,10 @@ private:
     char* m_content;
     char m_write_buf[WRITE_BUFFER_SIZE];
     int m_write_idx;
+    const char* doc_root = "/root/c++_dir/TinyWebServer/resources";
+    static const int FILENAME_SIZE = 256; 
+    char m_full_path[FILENAME_SIZE]; 
+    char* m_file_address;
+     struct stat m_file_stat;
 };
 
