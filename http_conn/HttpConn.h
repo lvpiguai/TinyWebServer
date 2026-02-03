@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
+#include<sys/stat.h>
 
 using namespace std;
 
@@ -67,6 +68,6 @@ private:
     static const int FILENAME_SIZE = 256; 
     char m_full_path[FILENAME_SIZE]; 
     char* m_file_address;
-     struct stat m_file_stat;
+    struct stat m_file_stat;
 };
 
