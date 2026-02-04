@@ -4,7 +4,7 @@
 
 class WebServer{
 public:
-    WebServer();
+    WebServer(){};
     ~WebServer();
     void init(int port,int thread_num);//初始化：配置参数，创建socket
     void start();//启动服务器

@@ -15,7 +15,7 @@ void HttpConn::init(int sockfd,int epollfd){
         m_keep_alive = false;
         m_content_length = 0;
         memset(m_read_buf,0,sizeof(m_read_buf));
-        memset(m_write_buf,0,sizeof(m_read_buf));
+        memset(m_write_buf,0,sizeof(m_write_buf));
 };
 
 void HttpConn::process(){
@@ -123,46 +123,55 @@ int HttpConn::do_request(){
     return 200;
 }
 
-
 //创建响应
 void HttpConn::generate_response(int status_code){
     const char* status_msg;
     const char* content;
-    switch(status_code){
-        case 200:
-            status_msg = "OK";
-            content = "<h1>Hi! This is TinyWebServer!</h1>";
-            break;
-        case 400:
+    const char*  conn = m_keep_alive?"keep-alive":"close";
+    int len;
+    if(200==status_code){
+        status_msg = "OK";
+        len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
+        "%s %d %s\r\n"
+        "Content-Type: text/html; charset=utf-8\r\n"
+        "Content-Length: %lld\r\n"
+        "Connection: %s\r\n\r\n"
+        ,m_version,status_code,status_msg,(long long)m_file_stat.st_size,conn);
+        
+        m_write_idx += len;
+        m_iv[0].iov_base = m_write_buf;
+        m_iv[0].iov_len = m_write_idx;
+        m_iv[1].iov_base = m_file_address;
+        m_iv[1].iov_len = m_file_stat.st_size;
+        m_iv_count = 2;
+
+    }else{
+        if(400==status_code){
             status_msg = "Bad Request";
             content = "<h1>Your request has syntax error.</h1>";
-            break;
-        default:
+        }else{
             status_msg = "Internal Error";
             content = "<h1>Something went wrong.</h1>";
-            break;
-    }
-    const char*  conn = m_keep_alive?"keep-alive":"close";
-
-    int len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
+        }
+        len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
         "%s %d %s\r\n"
         "Content-Type: text/html; charset=utf-8\r\n"
         "Content-Length: %zu\r\n"
         "Connection: %s\r\n\r\n"
         "%s"
         ,m_version,status_code,status_msg,strlen(content),conn,content);
+
+        m_write_idx += len;
+        m_iv[0].iov_base = m_write_buf;
+        m_iv[0].iov_len = m_write_idx;
+        m_iv_count = 1;
+    }
     
-    m_write_idx += len;
 }
 
 //发送响应
 void HttpConn::send_response(){
-    iovec iv[2];
-    iv[0].iov_base = m_write_buf;
-    iv[0].iov_len = m_write_idx;
-    iv[1].iov_base = m_file_address;
-    iv[1].iov_len = m_file_stat.st_size;
-    writev(m_socket_fd,iv,2);
+    writev(m_socket_fd,m_iv,m_iv_count);
 }
 
 //重置 oneshot 事件

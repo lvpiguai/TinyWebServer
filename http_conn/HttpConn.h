@@ -69,5 +69,7 @@ private:
     char m_full_path[FILENAME_SIZE]; 
     char* m_file_address;
     struct stat m_file_stat;
+    struct iovec m_iv[2];
+    int m_iv_count;
 };
 
