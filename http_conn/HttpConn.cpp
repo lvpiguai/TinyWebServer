@@ -172,6 +172,10 @@ void HttpConn::generate_response(int status_code){
 //发送响应
 void HttpConn::send_response(){
     writev(m_socket_fd,m_iv,m_iv_count);
+    if(m_file_address){
+        munmap(m_file_address,m_file_stat.st_size);
+        m_file_address = nullptr;
+    }
 }
 
 //重置 oneshot 事件
