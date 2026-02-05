@@ -64,7 +64,7 @@ private:
     char* m_content;
     char m_write_buf[WRITE_BUFFER_SIZE];
     int m_write_idx;
-    const char* doc_root = "/root/c++_dir/TinyWebServer/resources";
+    const char* m_doc_root = "/root/c++_dir/TinyWebServer/resources";
     static const int FILENAME_SIZE = 256; 
     char m_full_path[FILENAME_SIZE]; 
     char* m_file_address;

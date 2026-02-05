@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include "HttpConn.h"
 #include"WebServer.h"
+#include"../sql_pool/SqlPool.h"
 
 //析构：释放资源
 WebServer::~WebServer(){
@@ -16,13 +17,15 @@ WebServer::~WebServer(){
     close(m_listen_fd);
 };
 
-//初始化：配置参数，创建socket
+//初始化：配置参数，创建socket，数据库连接池
 void WebServer::init(int port,int thread_num){
     //配置参数
     m_port = port;
     m_thread_num = thread_num;
     m_http_pool = make_unique<ThreadPool<HttpConn>>(m_thread_num);//使用智能指针
     m_conns = std::make_unique<HttpConn[]>(MAX_FD);
+    //连接池
+    SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
 };

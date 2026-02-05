@@ -1,9 +1,9 @@
 CXX = g++
-CXXFLAGS = -std=c++14 -g -Wall -pthread -I./http_conn -I./web_server -MMD
-LDFLAGS = -pthread
+CXXFLAGS = -std=c++14 -g -Wall -pthread -I./http_conn -I./web_server -I./sql_pool -MMD
+LDFLAGS = -pthread -lmysqlclient
 
 TARGET = myserver
-SRC = $(wildcard *.cpp ./http_conn/*.cpp ./web_server/*.cpp)
+SRC = $(wildcard *.cpp ./http_conn/*.cpp ./web_server/*.cpp ./sql_pool/*.cpp)
 OBJ = $(patsubst %.cpp,%.o,$(SRC))
 DEPS = $(OBJ:.o=.d)
 

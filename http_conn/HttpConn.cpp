@@ -3,6 +3,8 @@
 #include<sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include "./sql_pool/SqlPool.h"
+#include <mysql/mysql.h>
 
 void HttpConn::init(int sockfd,int epollfd){
         m_socket_fd = sockfd;
@@ -101,12 +103,17 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
 //处理请求
 int HttpConn::do_request(){
     //拼接绝对路径
-    strcpy(m_full_path,doc_root);
+    strcpy(m_full_path,m_doc_root);
     if(strcmp(m_url,"/")==0){
         strcat(m_full_path,"/index.html");
     }else{
         strcat(m_full_path,m_url);
     }
+    if(m_method==METHOD::POST && strcasecmp(m_url,"/login")){//登录
+        MYSQL* conn = SqlPool::get_instance().get_conn();
+        
+    }
+
     //检查文件状态
     if(stat(m_full_path,&m_file_stat)<0){
         perror("file not found");
