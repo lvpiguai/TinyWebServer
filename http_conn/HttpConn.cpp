@@ -3,8 +3,10 @@
 #include<sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include "./sql_pool/SqlPool.h"
+#include "../sql_pool/SqlPool.h"
 #include <mysql/mysql.h>
+#include<cstring>
+#include<mysql/mysql.h>
 
 void HttpConn::init(int sockfd,int epollfd){
         m_socket_fd = sockfd;
@@ -102,18 +104,37 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
 
 //处理请求
 int HttpConn::do_request(){
+    const char* target_url = m_url;
+    //处理 登录请求
+    if(m_method==METHOD::POST && strcasecmp(m_url,"/login")==0){//登录
+        fprintf(stderr,"处理登录请求，m_url:%s\n",m_url);
+        //解析出 username 和 password
+        char username[50]{},password[50]{};
+        char* st = m_content+9;
+        char* ed = strchr(m_content,'&');
+        *ed = '\0';
+        strcpy(username,st);
+        strcpy(password,ed+10);
+        //查询数据库
+        MYSQL* conn = SqlPool::get_instance().get_conn();//获取数据库连接
+        char sql[256]{};
+        snprintf(sql,sizeof(sql),"SELECT * FROM user WHERE username = '%s' AND password = '%s'",username,password);
+        mysql_query(conn,sql);//查询
+        MYSQL_RES* res = mysql_store_result(conn);//获取结果
+        if(mysql_num_rows(res)>0){//根据结果跳转页面
+            target_url = "/welcome.html";
+        }else{
+            target_url = "error.html";
+        }
+        mysql_free_result(res);//释放内存
+        SqlPool::get_instance().free_conn(conn);//释放连接
+    }
+    fprintf(stderr,"处理登录请求后，m_url:%s\n",m_url);
     //拼接绝对路径
     strcpy(m_full_path,m_doc_root);
-    if(strcmp(m_url,"/")==0){
-        strcat(m_full_path,"/index.html");
-    }else{
-        strcat(m_full_path,m_url);
-    }
-    if(m_method==METHOD::POST && strcasecmp(m_url,"/login")){//登录
-        MYSQL* conn = SqlPool::get_instance().get_conn();
-        
-    }
-
+    if(strcmp(m_url,"/")==0)target_url = "/index.html";
+    strcat(m_full_path,target_url);
+    fprintf(stderr, "拼接后绝对路径 =  %s\n", m_full_path);
     //检查文件状态
     if(stat(m_full_path,&m_file_stat)<0){
         perror("file not found");
