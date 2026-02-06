@@ -8,19 +8,39 @@
 #include<cstring>
 #include<mysql/mysql.h>
 
+//初始化 http 连接
 void HttpConn::init(int sockfd,int epollfd){
-        m_socket_fd = sockfd;
-        m_epoll_fd = epollfd;
-        m_parse_stage = PARSE_STAGE::REQUEST_LINE;
-        m_parse_idx = 0;
-        m_read_idx = 0;
-        m_write_idx = 0;
-        m_line_start_idx = 0;
-        m_keep_alive = false;
-        m_content_length = 0;
-        memset(m_read_buf,0,sizeof(m_read_buf));
-        memset(m_write_buf,0,sizeof(m_write_buf));
+    //建立连接    
+    m_socket_fd = sockfd;
+    m_epoll_fd = epollfd;
+    //重置 http 请求状态
+    init_request();
 };
+
+//重置 http 请求状态
+void HttpConn::init_request(){
+    //状态机
+    m_parse_stage = PARSE_STAGE::REQUEST_LINE;
+    // 指针和计数器归零
+    m_parse_idx = 0;
+    m_read_idx = 0;
+    m_write_idx = 0;
+    m_line_start_idx = 0;
+    m_iv_count = 0;
+    // 逻辑开关归位
+    m_keep_alive = false;
+    m_content_length = 0;
+    // 指针安全归位（防止野指针）
+    m_url = nullptr;
+    m_version = nullptr;
+    m_host = nullptr;
+    m_content = nullptr;
+    m_file_address = nullptr;
+    // 清空缓冲区
+    memset(m_read_buf, 0, READ_BUFFER_SIZE);
+    memset(m_write_buf, 0, WRITE_BUFFER_SIZE);
+    memset(m_full_path, 0, FILENAME_SIZE);
+}
 
 void HttpConn::process(){
     //读
@@ -47,9 +67,10 @@ void HttpConn::process(){
     send_response();
 
     //重置 ONESHOT 或 关闭连接
-    if(parse_ret==PARSE_RESULT::OK){   //成功
+    if(parse_ret==PARSE_RESULT::OK && m_keep_alive){   //成功
+        init_request();//重置 http 请求状态
         reset_oneshot(m_epoll_fd,m_socket_fd);
-    }else{  //语法错误
+    }else{  //出错或非长连接
         close(m_socket_fd);
     }
    
@@ -124,7 +145,7 @@ int HttpConn::do_request(){
         if(mysql_num_rows(res)>0){//根据结果跳转页面
             target_url = "/welcome.html";
         }else{
-            target_url = "error.html";
+            target_url = "/error.html";
         }
         mysql_free_result(res);//释放内存
         SqlPool::get_instance().free_conn(conn);//释放连接

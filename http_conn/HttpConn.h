@@ -26,6 +26,7 @@ public:
     void init(int socket_fd,int epoll_fd);//初始化http连接
     void process();//处理http 交互，读入http请求，解析，返回响应
 private:
+    void init_request();//重置 http 请求状态
 //process 调用
     bool recv_to_buffer();//读数据到 m_read_buf 中
     PARSE_RESULT parse_request();//解析请求
