@@ -126,9 +126,9 @@ HttpConn::PARSE_RESULT HttpConn::parse_request(){
 //处理请求
 int HttpConn::do_request(){
     const char* target_url = m_url;
-    //处理 登录请求
-    if(m_method==METHOD::POST && strcasecmp(m_url,"/login")==0){//登录
-        fprintf(stderr,"处理登录请求，m_url:%s\n",m_url);
+    //处理 登录注册
+    if(m_method==METHOD::POST && 
+        (strcasecmp(m_url,"/login")==0 || strcasecmp(m_url,"/register")==0)){//登录或注册
         //解析出 username 和 password
         char username[50]{},password[50]{};
         char* st = m_content+9;
@@ -139,23 +139,30 @@ int HttpConn::do_request(){
         //查询数据库
         MYSQL* conn = SqlPool::get_instance().get_conn();//获取数据库连接
         char sql[256]{};
-        snprintf(sql,sizeof(sql),"SELECT * FROM user WHERE username = '%s' AND password = '%s'",username,password);
-        mysql_query(conn,sql);//查询
-        MYSQL_RES* res = mysql_store_result(conn);//获取结果
-        if(mysql_num_rows(res)>0){//根据结果跳转页面
-            target_url = "/welcome.html";
-        }else{
-            target_url = "/error.html";
+        if(strcasecmp(m_url,"/login")==0){//登录
+            snprintf(sql,sizeof(sql),"SELECT * FROM user WHERE username = '%s' AND password = '%s'",username,password);
+            mysql_query(conn,sql);
+            MYSQL_RES* res = mysql_store_result(conn);//获取结果
+            if(mysql_num_rows(res)>0){//用户名和密码正确
+                target_url = "/welcome.html";
+            }else{
+                target_url = "/error.html";
+            }
+            mysql_free_result(res);//释放内存
+        }else{//注册
+            snprintf(sql,sizeof(sql),"INSERT INTO user (username,password) VALUES ('%s','%s')",username,password);
+            if(mysql_query(conn,sql)==0){//插入成功，跳转登录页面
+                target_url = "/welcome.html";
+            }else{
+                target_url = "/error.html";
+            }
         }
-        mysql_free_result(res);//释放内存
         SqlPool::get_instance().free_conn(conn);//释放连接
     }
-    fprintf(stderr,"处理登录请求后，m_url:%s\n",m_url);
     //拼接绝对路径
     strcpy(m_full_path,m_doc_root);
     if(strcmp(m_url,"/")==0)target_url = "/index.html";
     strcat(m_full_path,target_url);
-    fprintf(stderr, "拼接后绝对路径 =  %s\n", m_full_path);
     //检查文件状态
     if(stat(m_full_path,&m_file_stat)<0){
         perror("file not found");
@@ -165,6 +172,7 @@ int HttpConn::do_request(){
     int fd = open(m_full_path,O_RDONLY);
     if(fd<0){
         perror("open file failed");
+        return 500;
     }
     //映射文件到内存
     m_file_address = (char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
@@ -197,10 +205,13 @@ void HttpConn::generate_response(int status_code){
     }else{
         if(400==status_code){
             status_msg = "Bad Request";
-            content = "<h1>Your request has syntax error.</h1>";
-        }else{
+            content = "<h1>400 Your request has syntax error.</h1>";
+        }else if(500==status_code){//500
             status_msg = "Internal Error";
-            content = "<h1>Something went wrong.</h1>";
+            content = "<h1>500 Internal Error</h1>";
+        }else{//404
+            status_msg = "Not Found";
+            content = "<h1>404 Not Found</h1>";
         }
         len = snprintf(m_write_buf,WRITE_BUFFER_SIZE-m_write_idx,
         "%s %d %s\r\n"
