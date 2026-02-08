@@ -1,9 +1,9 @@
 CXX = g++
-CXXFLAGS = -std=c++14 -g -Wall -pthread -I./http_conn -I./web_server -I./sql_pool
+CXXFLAGS = -std=c++14 -g -Wall -pthread -I./src/http_conn -I./src/web_server -I./src/sql_pool -I./src/timer -I./src/log
 LDFLAGS = -pthread -lmysqlclient
 
 TARGET = server
-SRC = $(wildcard *.cpp ./http_conn/*.cpp ./web_server/*.cpp ./sql_pool/*.cpp)
+SRC = $(shell find ./src -name "*.cpp")
 
 $(TARGET): $(SRC)
 	$(CXX) $(CXXFLAGS)  $(SRC) $(LDFLAGS) -o $(TARGET)
