@@ -18,7 +18,7 @@ WebServer::~WebServer(){
     close(m_listen_fd);
 };
 
-//初始化：配置参数，创建socket，数据库连接池
+//初始化：配置参数，创建socket，连接池，日志
 void WebServer::init(int port,int thread_num){
     //配置参数
     m_port = port;
