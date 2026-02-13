@@ -1,4 +1,5 @@
 #include"SqlPool.h"
+#include "../log/Log.h"
 
 //构造
 SqlPool::SqlPool(){
@@ -26,6 +27,7 @@ void SqlPool::init(const char* host,int port,const char* username,const char* pa
         conn = mysql_real_connect(conn,host,username,password,db_name,port,nullptr,0);//建立连接
         m_conn_que.push(conn);//加入连接池
     }   
+    LOG_INFO("SqlPool init success, max_conn: %d", m_max_conn);
 }
 
 //获取连接

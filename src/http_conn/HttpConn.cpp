@@ -7,6 +7,7 @@
 #include <mysql/mysql.h>
 #include<cstring>
 #include<mysql/mysql.h>
+#include "../log/Log.h" 
 
 //初始化 http 连接
 void HttpConn::init(int sockfd,int epollfd){
@@ -144,16 +145,20 @@ int HttpConn::do_request(){
             mysql_query(conn,sql);
             MYSQL_RES* res = mysql_store_result(conn);//获取结果
             if(mysql_num_rows(res)>0){//用户名和密码正确
+                LOG_INFO("User %s login success", username);
                 target_url = "/welcome.html";
             }else{
+                LOG_INFO("User %s login failed (password error)", username);
                 target_url = "/error.html";
             }
             mysql_free_result(res);//释放内存
         }else{//注册
             snprintf(sql,sizeof(sql),"INSERT INTO user (username,password) VALUES ('%s','%s')",username,password);
             if(mysql_query(conn,sql)==0){//插入成功，跳转登录页面
+                LOG_INFO("User %s register success", username);
                 target_url = "/welcome.html";
             }else{
+                LOG_ERROR("User %s register failed: %s", username, sql);
                 target_url = "/error.html";
             }
         }
@@ -165,13 +170,13 @@ int HttpConn::do_request(){
     strcat(m_full_path,target_url);
     //检查文件状态
     if(stat(m_full_path,&m_file_stat)<0){
-        perror("file not found");
+        LOG_ERROR("File not found: %s", m_full_path);
         return 404;
     }
     //获取文件 fd 
     int fd = open(m_full_path,O_RDONLY);
     if(fd<0){
-        perror("open file failed");
+        LOG_ERROR("Open file failed: %s", m_full_path);
         return 500;
     }
     //映射文件到内存
@@ -307,6 +312,7 @@ HttpConn::PARSE_RESULT HttpConn::parse_request_line(char* text){
     //状态转移
     m_parse_stage = PARSE_STAGE::HEADER;
 
+    LOG_INFO("Request: %s %s %s", text, m_url, m_version);
     return PARSE_RESULT::OK;
 }
 

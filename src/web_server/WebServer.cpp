@@ -31,7 +31,7 @@ void WebServer::init(int port,int thread_num){
     SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
-    LOG_INFO("========== Server init port:%d ==========", m_port);
+    LOG_INFO("Server start listening on port: %d", m_port);
 };
 
 //启动服务器
@@ -52,11 +52,14 @@ void WebServer::start(){
                 while(true){
                     int confd = accept(m_listen_fd,nullptr,nullptr);
                     if(confd<0){//没有新连接了
-                        if(errno!=EAGAIN && errno!=EWOULDBLOCK)perror("accept error");
+                        if(errno!=EAGAIN && errno!=EWOULDBLOCK){
+                            LOG_ERROR("Accept errno is:%d", errno);
+                        }
                         break;
                     }
                     addfd(m_epoll_fd,confd,true); //加入监听链表
                     m_conns[confd].init(confd,m_epoll_fd); //初始化 http 连接
+                    LOG_INFO("New connection client[%d] arrived", confd);
                 }
             }else{ //已有连接
                 m_http_pool->append(&m_conns[fd]); //追加到任务列表
