@@ -96,16 +96,21 @@ void Log::write_log(int level, const char* format, ...){
     std::unique_lock<std::mutex>locker(m_mutex);//抢锁
     ++m_count;//计数+1
     if(m_today!=my_tm.tm_mday || m_count%m_max_lines==0){//需要翻页，新增文件
-        char time_str[16]{0};
-        char full_name[128]{0};
+        char full_name[128]{0};//存储新文件名
+        char time_str[16]{0};//存储时间前缀名
+        snprintf(time_str,sizeof(time_str),"%d_%02d_%02d_",my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday);
         if(m_today!=my_tm.tm_mday){//跨天
-            snprintf(time_str,sizeof(time_str),"%d_%02d_%02d_",my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday);
             snprintf(full_name,sizeof(full_name),"%s%s%s",m_dir_name,time_str,m_file_name);
+            m_today = my_tm.tm_mday;//更新天数
             m_count  = 0;
         }else{//行满
             snprintf(full_name,sizeof(full_name),"%s%s%s.%d",m_dir_name,time_str,m_file_name,m_count/m_max_lines);
         }
-        m_fp = fopen(full_name,"a");
+        if(m_fp){//原文件存在
+            fflush(m_fp);//刷新缓冲区
+            fclose(m_fp);//关闭原文件   
+        }
+        m_fp = fopen(full_name,"a");//打开新文件
     }
     va_list valist; //变长参数开始
     va_start(valist,format);
