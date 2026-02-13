@@ -6,9 +6,10 @@
 #include "../thread_pool.h"
 #include <sys/epoll.h>
 #include <fcntl.h>
-#include "HttpConn.h"
+#include "../http_conn/HttpConn.h"
 #include"WebServer.h"
 #include"../sql_pool/SqlPool.h"
+#include "../log/Log.h"
 
 //析构：释放资源
 WebServer::~WebServer(){
@@ -24,10 +25,13 @@ void WebServer::init(int port,int thread_num){
     m_thread_num = thread_num;
     m_http_pool = make_unique<ThreadPool<HttpConn>>(m_thread_num);//使用智能指针
     m_conns = std::make_unique<HttpConn[]>(MAX_FD);
+    //日志系统初始化
+    Log::get_instance().init("./log/serverLog",0,2000,800000);
     //连接池
     SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
+    LOG_INFO("========== Server init port:%d ==========", m_port);
 };
 
 //启动服务器
