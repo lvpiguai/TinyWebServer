@@ -95,8 +95,17 @@ void Log::write_log(int level, const char* format, ...){
     //拼接日志内容
     std::unique_lock<std::mutex>locker(m_mutex);//抢锁
     ++m_count;//计数+1
-    if(m_today!=my_tm.tm_mday || m_count==m_max_lines){//需要翻页，新增文件
-
+    if(m_today!=my_tm.tm_mday || m_count%m_max_lines==0){//需要翻页，新增文件
+        char time_str[16]{0};
+        char full_name[128]{0};
+        if(m_today!=my_tm.tm_mday){//跨天
+            snprintf(time_str,sizeof(time_str),"%d_%02d_%02d_",my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday);
+            snprintf(full_name,sizeof(full_name),"%s%s%s",m_dir_name,time_str,m_file_name);
+            m_count  = 0;
+        }else{//行满
+            snprintf(full_name,sizeof(full_name),"%s%s%s.%d",m_dir_name,time_str,m_file_name,m_count/m_max_lines);
+        }
+        m_fp = fopen(full_name,"a");
     }
     va_list valist; //变长参数开始
     va_start(valist,format);
@@ -115,7 +124,7 @@ void Log::write_log(int level, const char* format, ...){
 }
 
 //线程工作函数
-void* Log::write_woker(void* args){
+void* Log::write_worker(void* args){
     get_instance().async_write_log();
     return nullptr;
 }
