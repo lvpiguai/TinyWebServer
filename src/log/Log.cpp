@@ -43,7 +43,7 @@ bool Log::init(const char* file_full_path,int close_log,int max_queue_size,int m
     localtime_r(&tm,&t);
     m_today = t.tm_mday;
     const char* p = strrchr(file_full_path,'/');
-    char full_name[256]{0};
+    char full_name[512]{0};
     if(p){
         strcpy(m_file_name,p+1);
         int len = p-file_full_path+1;
@@ -96,7 +96,7 @@ void Log::write_log(int level, const char* format, ...){
     std::unique_lock<std::mutex>locker(m_mutex);//抢锁
     ++m_count;//计数+1
     if(m_today!=my_tm.tm_mday || m_count%m_max_lines==0){//需要翻页，新增文件
-        char full_name[128]{0};//存储新文件名
+        char full_name[512]{0};//存储新文件名
         char time_str[16]{0};//存储时间前缀名
         snprintf(time_str,sizeof(time_str),"%d_%02d_%02d_",my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday);
         if(m_today!=my_tm.tm_mday){//跨天

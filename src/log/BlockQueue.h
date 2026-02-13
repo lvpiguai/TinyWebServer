@@ -21,7 +21,7 @@ public:
     }
     bool push(const T& item){
         std::unique_lock<std::mutex>locker(m_mutex);
-        if(m_queue.size()>=m_max_size){
+        if((int)m_queue.size()>=m_max_size){
             m_cond.notify_all();
             return false;
         }
