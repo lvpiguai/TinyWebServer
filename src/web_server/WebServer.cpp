@@ -40,13 +40,11 @@ void WebServer::start(){
     m_epoll_fd = epoll_create(5);
     addfd(m_epoll_fd,m_listen_fd,false); // 监听socket 不用 ONESHOT 否则只能
     //死循环，处理新连接     
-    while(1)
-    {
+    while(1){
         //epoll 阻塞监听所有 fd
         int num = epoll_wait(m_epoll_fd,m_events,MAX_EVENT,-1);
         //遍历处理所有事件
-        for(int i = 0;i<num;++i)
-        {
+        for(int i = 0;i<num;++i){
             int fd = m_events[i].data.fd;
             if(fd==m_listen_fd){ //新连接
                 while(true){
@@ -88,8 +86,7 @@ void WebServer::initSocket(){
 
 
 //设置socket 非阻塞
-void WebServer::setnonblocking(int fd)
-{
+void WebServer::setnonblocking(int fd){
     int oldoption = fcntl(fd,F_GETFL);
     int newoption  = oldoption | O_NONBLOCK;
     fcntl(fd,F_SETFL,newoption);
@@ -97,8 +94,7 @@ void WebServer::setnonblocking(int fd)
 }
 
 //添加 fd 到 epoll 监控列表
-void WebServer::addfd(int epollfd,int fd,bool one_shot)
-{
+void WebServer::addfd(int epollfd,int fd,bool one_shot){
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;//新连接，新数据，断连接，ET 模式
