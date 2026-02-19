@@ -31,7 +31,7 @@ void WebServer::init(int port,int thread_num){
     SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
-    LOG_INFO("监听端口 fd = %d", m_port);
+    LOG_INFO("监听端口 port = %d", m_port);
 };
 
 //启动服务器
