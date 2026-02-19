@@ -309,6 +309,8 @@ HttpConn::PARSE_RESULT HttpConn::parse_request_line(char* text){
     if(!m_url || *m_url!='/'){
         return PARSE_RESULT::SYNTAX_ERROR;
     }
+    const char* method_str[] = {"GET", "PUT", "DELETE", "POST"};
+    LOG_INFO("收到http请求：%s %s",method_str[(int)m_method],m_url);
     //状态转移
     m_parse_stage = PARSE_STAGE::HEADER;
     return PARSE_RESULT::OK;
