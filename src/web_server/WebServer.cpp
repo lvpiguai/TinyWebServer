@@ -31,7 +31,7 @@ void WebServer::init(int port,int thread_num){
     SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
-    LOG_INFO("Server start listening on port: %d", m_port);
+    LOG_INFO("监听端口 fd = %d", m_port);
 };
 
 //启动服务器
@@ -51,14 +51,14 @@ void WebServer::start(){
                     int confd = accept(m_listen_fd,nullptr,nullptr);
                     if(confd<0){//没有新连接了
                         if(errno!=EAGAIN && errno!=EWOULDBLOCK){
-                            LOG_ERROR("Accept errno is:%d", errno);
+                            LOG_ERROR("accept() 错误，errno = %d", errno);
                         }
                         break;
                     }
                     addfd(m_epoll_fd,confd,true); //加入监听链表
                     m_conns[confd].init(confd,m_epoll_fd); //初始化 http 连接
                     add_timer(confd);//加入定时器
-                    LOG_INFO("New connection client[%d] arrived", confd);
+                    LOG_INFO("新连接 fd = %d", confd);
                 }
             }else{ //已有连接
                 m_http_pool->append(&m_conns[fd]); //追加到任务列表
@@ -129,7 +129,7 @@ void WebServer::handle_expired_timers(){
         if(node.expire>cur_time)break;
         epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,node.fd,0);
         close(node.fd);
-        LOG_INFO("连接超时已断开：fd = ",node.fd);
+        LOG_INFO("连接超时已断开：fd = %d",node.fd);
         m_timer_list.pop_front();
     }
 }
