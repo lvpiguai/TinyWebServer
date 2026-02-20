@@ -138,7 +138,8 @@ int HttpConn::do_request(){
         strcpy(username,st);
         strcpy(password,ed+10);
         //查询数据库
-        MYSQL* conn = SqlPool::get_instance().get_conn();//获取数据库连接
+        SqlConnRAII connRAII(SqlPool::get_instance());
+        MYSQL* conn = connRAII.get();//获取数据库连接
         char sql[256]{};
         if(strcasecmp(m_url,"/login")==0){//登录
             snprintf(sql,sizeof(sql),"SELECT * FROM user WHERE username = '%s' AND password = '%s'",username,password);
@@ -162,7 +163,6 @@ int HttpConn::do_request(){
                 target_url = "/error.html";
             }
         }
-        SqlPool::get_instance().free_conn(conn);//释放连接
     }
     //拼接绝对路径
     strcpy(m_full_path,m_doc_root);

@@ -19,7 +19,22 @@ private:
     sem_t m_sem;
     std::mutex m_mutex;
 };
-//TODO SqlPoolRAII 自动还连接
+
+class SqlConnRAII{
+public:
+    SqlConnRAII(SqlPool& pool):m_pool(pool),m_conn(pool.get_conn()){}
+    ~SqlConnRAII(){
+        m_pool.free_conn(m_conn);
+    }
+    MYSQL* get() const{//获取连接
+        return m_conn;
+    }
+    SqlConnRAII(const SqlConnRAII&) = delete; //禁用拷贝和复制构造
+    SqlConnRAII& operator=(const SqlConnRAII&) = delete;
+private:    
+    SqlPool& m_pool;
+    MYSQL* m_conn;
+};
 
 
 
