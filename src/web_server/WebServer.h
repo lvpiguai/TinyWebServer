@@ -2,11 +2,7 @@
 #include <list>
 #include<memory>
 #include"../thread_pool.h"
-
-struct TimerNode{
-    int fd;
-    time_t expire;
-};
+#include"../timer/TimerManager.h"
 
 class WebServer{
 public:
@@ -29,10 +25,6 @@ private://成员变量
     std::unique_ptr<ThreadPool<HttpConn>>m_http_pool;//处理http请求的线程池
     std::unique_ptr<HttpConn[]>m_conns; //保存所有的 http 连接
 private://定时器
-    int m_timeout_ms = 1000;//epoll_wait 阻塞时间 1s
-    int m_conn_timeout = 5;//连接超时时间
-    std::list<TimerNode>m_timer_list;
-    void add_timer(int fd);
-    void update_timer(int fd);
-    void handle_expired_timers();
+    int m_conn_timeout_ms = 5000;//超时时间
+    TimerManager m_timer_mgr;
 };  

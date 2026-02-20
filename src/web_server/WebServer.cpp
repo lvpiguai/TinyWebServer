@@ -42,7 +42,8 @@ void WebServer::start(){
     //死循环，处理新连接     
     while(1){
         //epoll 阻塞监听所有 fd
-        int num = epoll_wait(m_epoll_fd,m_events,MAX_EVENT,m_timeout_ms);
+        int time_ms = m_timer_mgr.get_next_timeout();
+        int num = epoll_wait(m_epoll_fd,m_events,MAX_EVENT,time_ms);
         //遍历处理所有事件
         for(int i = 0;i<num;++i){
             int fd = m_events[i].data.fd;
@@ -57,15 +58,15 @@ void WebServer::start(){
                     }
                     addfd(m_epoll_fd,confd,true); //加入监听链表
                     m_conns[confd].init(confd,m_epoll_fd); //初始化 http 连接
-                    add_timer(confd);//加入定时器
+                    m_timer_mgr.update_timer(confd,m_conn_timeout_ms);//加入定时器
                     LOG_INFO("新连接 fd = %d", confd);
                 }
             }else{ //已有连接
                 m_http_pool->append(&m_conns[fd]); //追加到任务列表
-                update_timer(fd);//更新定时器
+                m_timer_mgr.update_timer(fd,m_conn_timeout_ms);//更新定时器
             }
         }
-        handle_expired_timers();
+        m_timer_mgr.handle_expired_timers(m_epoll_fd);
     }
 }
 
@@ -104,32 +105,4 @@ void WebServer::addfd(int epollfd,int fd,bool one_shot){
     if(one_shot)event.events |= EPOLLONESHOT; 
     setnonblocking(fd); //使用 epoll ，socket 相关函数必须非阻塞，只需要 epoll_wait 一个阻塞即一个监听
     epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&event); //加入列表需要说明需要监听的事件
-}
-
-
-void WebServer::add_timer(int fd){
-    time_t expire = time(nullptr)+m_conn_timeout;
-    m_timer_list.push_back({fd,expire});
-}
-
-void WebServer::update_timer(int fd){
-    for(auto it = m_timer_list.begin();it!=m_timer_list.end();++it){
-        if(it->fd==fd){
-            it->expire = time(nullptr)+m_conn_timeout;
-            m_timer_list.splice(m_timer_list.end(),m_timer_list,it);
-            break;
-        }
-    }
-}
-
-void WebServer::handle_expired_timers(){
-    time_t cur_time = time(nullptr);
-    while(!m_timer_list.empty()){
-        auto node = m_timer_list.front();
-        if(node.expire>cur_time)break;
-        epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,node.fd,0);
-        close(node.fd);
-        LOG_INFO("连接超时已断开：fd = %d",node.fd);
-        m_timer_list.pop_front();
-    }
 }
