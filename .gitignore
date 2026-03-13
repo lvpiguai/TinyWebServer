@@ -58,3 +58,6 @@ log/*
 # 5. 忽略 build 文件夹 (如果你用了我之前给的 Makefile)
 build/
 
+# 忽略 wrk 压测目录
+
+wrk/

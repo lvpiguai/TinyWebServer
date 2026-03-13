@@ -26,12 +26,12 @@ void WebServer::init(int port,int thread_num){
     m_http_pool = make_unique<ThreadPool<HttpConn>>(m_thread_num);//使用智能指针
     m_conns = std::make_unique<HttpConn[]>(MAX_FD);
     //日志系统初始化
-    Log::get_instance().init("./log/serverLog",0,2000,800000);
+    Log::get_instance().init("./log/serverLog",1,2000,100000);
     //连接池
     SqlPool::get_instance().init("192.168.189.101",3306,"root","root","webdb",8);
     //创建监听 sockect
     initSocket();
-    LOG_INFO("Server start listening on port: %d", m_port);
+    LOG_INFO("监听端口 port = %d", m_port);
 };
 
 //启动服务器
@@ -40,31 +40,33 @@ void WebServer::start(){
     m_epoll_fd = epoll_create(5);
     addfd(m_epoll_fd,m_listen_fd,false); // 监听socket 不用 ONESHOT 否则只能
     //死循环，处理新连接     
-    while(1)
-    {
+    while(1){
         //epoll 阻塞监听所有 fd
-        int num = epoll_wait(m_epoll_fd,m_events,MAX_EVENT,-1);
+        int time_ms = m_timer_mgr.get_next_timeout();
+        int num = epoll_wait(m_epoll_fd,m_events,MAX_EVENT,time_ms);
         //遍历处理所有事件
-        for(int i = 0;i<num;++i)
-        {
+        for(int i = 0;i<num;++i){
             int fd = m_events[i].data.fd;
             if(fd==m_listen_fd){ //新连接
                 while(true){
                     int confd = accept(m_listen_fd,nullptr,nullptr);
                     if(confd<0){//没有新连接了
                         if(errno!=EAGAIN && errno!=EWOULDBLOCK){
-                            LOG_ERROR("Accept errno is:%d", errno);
+                            LOG_ERROR("accept() 错误，errno = %d", errno);
                         }
                         break;
                     }
-                    addfd(m_epoll_fd,confd,true); //加入监听链表
+                    addfd(m_epoll_fd,confd,true); //加入监听
                     m_conns[confd].init(confd,m_epoll_fd); //初始化 http 连接
-                    LOG_INFO("New connection client[%d] arrived", confd);
+                    m_timer_mgr.update_timer(confd,m_conn_timeout_ms);//加入定时器
+                    LOG_INFO("新连接 fd = %d", confd);
                 }
             }else{ //已有连接
                 m_http_pool->append(&m_conns[fd]); //追加到任务列表
+                m_timer_mgr.update_timer(fd,m_conn_timeout_ms);//更新定时器
             }
         }
+        m_timer_mgr.handle_expired_timers(m_epoll_fd);//处理过期的
     }
 }
 
@@ -83,22 +85,19 @@ void WebServer::initSocket(){
     //给 socket 绑定地址
     bind(m_listen_fd,(const sockaddr*)&addr,sizeof(addr));
     //开启监听
-    listen(m_listen_fd,5);
+    listen(m_listen_fd,128);
 }
 
 
 //设置socket 非阻塞
-void WebServer::setnonblocking(int fd)
-{
+void WebServer::setnonblocking(int fd){
     int oldoption = fcntl(fd,F_GETFL);
     int newoption  = oldoption | O_NONBLOCK;
     fcntl(fd,F_SETFL,newoption);
-
 }
 
 //添加 fd 到 epoll 监控列表
-void WebServer::addfd(int epollfd,int fd,bool one_shot)
-{
+void WebServer::addfd(int epollfd,int fd,bool one_shot){
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;//新连接，新数据，断连接，ET 模式

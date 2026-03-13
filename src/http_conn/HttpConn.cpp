@@ -138,31 +138,31 @@ int HttpConn::do_request(){
         strcpy(username,st);
         strcpy(password,ed+10);
         //查询数据库
-        MYSQL* conn = SqlPool::get_instance().get_conn();//获取数据库连接
+        SqlConnRAII connRAII(SqlPool::get_instance());
+        MYSQL* conn = connRAII.get();//获取数据库连接
         char sql[256]{};
         if(strcasecmp(m_url,"/login")==0){//登录
             snprintf(sql,sizeof(sql),"SELECT * FROM user WHERE username = '%s' AND password = '%s'",username,password);
             mysql_query(conn,sql);
             MYSQL_RES* res = mysql_store_result(conn);//获取结果
             if(mysql_num_rows(res)>0){//用户名和密码正确
-                LOG_INFO("User %s login success", username);
+                LOG_INFO("用户 %s 登录成功", username);
                 target_url = "/welcome.html";
             }else{
-                LOG_INFO("User %s login failed (password error)", username);
+                LOG_INFO("用户 %s 登录失败", username);
                 target_url = "/error.html";
             }
             mysql_free_result(res);//释放内存
         }else{//注册
             snprintf(sql,sizeof(sql),"INSERT INTO user (username,password) VALUES ('%s','%s')",username,password);
             if(mysql_query(conn,sql)==0){//插入成功，跳转登录页面
-                LOG_INFO("User %s register success", username);
+                LOG_INFO("用户 %s 注册成功", username);
                 target_url = "/welcome.html";
             }else{
-                LOG_ERROR("User %s register failed: %s", username, sql);
+                LOG_ERROR("用户 %s 注册成功", username, sql);
                 target_url = "/error.html";
             }
         }
-        SqlPool::get_instance().free_conn(conn);//释放连接
     }
     //拼接绝对路径
     strcpy(m_full_path,m_doc_root);
@@ -170,18 +170,19 @@ int HttpConn::do_request(){
     strcat(m_full_path,target_url);
     //检查文件状态
     if(stat(m_full_path,&m_file_stat)<0){
-        LOG_ERROR("File not found: %s", m_full_path);
+        LOG_ERROR("文件未找到：%s", m_full_path);
         return 404;
     }
     //获取文件 fd 
     int fd = open(m_full_path,O_RDONLY);
     if(fd<0){
-        LOG_ERROR("Open file failed: %s", m_full_path);
+        LOG_ERROR("打开文件失败：%s", m_full_path);
         return 500;
     }
     //映射文件到内存
     m_file_address = (char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
-    
+    close(fd);
+
     return 200;
 }
 
@@ -309,10 +310,10 @@ HttpConn::PARSE_RESULT HttpConn::parse_request_line(char* text){
     if(!m_url || *m_url!='/'){
         return PARSE_RESULT::SYNTAX_ERROR;
     }
+    const char* method_str[] = {"GET", "PUT", "DELETE", "POST"};
+    LOG_INFO("收到http请求：%s %s",method_str[(int)m_method],m_url);
     //状态转移
     m_parse_stage = PARSE_STAGE::HEADER;
-
-    LOG_INFO("Request: %s %s %s", text, m_url, m_version);
     return PARSE_RESULT::OK;
 }
 

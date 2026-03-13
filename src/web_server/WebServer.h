@@ -1,6 +1,8 @@
 #include "../http_conn/HttpConn.h"
+#include <list>
 #include<memory>
 #include"../thread_pool.h"
+#include"../timer/TimerManager.h"
 
 class WebServer{
 public:
@@ -22,4 +24,7 @@ private://成员变量
     epoll_event m_events[MAX_EVENT];
     std::unique_ptr<ThreadPool<HttpConn>>m_http_pool;//处理http请求的线程池
     std::unique_ptr<HttpConn[]>m_conns; //保存所有的 http 连接
+private://定时器
+    int m_conn_timeout_ms = 5000;//超时时间
+    TimerManager m_timer_mgr;
 };  
