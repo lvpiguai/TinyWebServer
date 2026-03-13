@@ -181,7 +181,8 @@ int HttpConn::do_request(){
     }
     //映射文件到内存
     m_file_address = (char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
-    
+    close(fd);
+
     return 200;
 }
 

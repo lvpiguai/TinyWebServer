@@ -85,7 +85,7 @@ void WebServer::initSocket(){
     //给 socket 绑定地址
     bind(m_listen_fd,(const sockaddr*)&addr,sizeof(addr));
     //开启监听
-    listen(m_listen_fd,5);
+    listen(m_listen_fd,128);
 }
 
 
