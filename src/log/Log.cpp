@@ -140,6 +140,6 @@ void Log::async_write_log(){
     while(m_log_queue->pop(one_log)){//死循环从队列取出元素,并写入磁盘
         std::lock_guard<std::mutex>guard(m_mutex);
         fputs(one_log.c_str(),m_fp);
-        fflush(m_fp);//强制刷新
+        //fflush(m_fp);//强制刷新
     }
 }
