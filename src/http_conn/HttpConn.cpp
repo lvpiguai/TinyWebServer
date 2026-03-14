@@ -44,35 +44,49 @@ void HttpConn::init_request(){
 }
 
 void HttpConn::process(){
-    //读
+    //读到缓冲区
     if(!recv_to_buffer()){
         close(m_socket_fd);//读取失败关闭连接
         return;
     }
+    while(true){//循环处理所有请求
+        //解析请求
+        PARSE_RESULT parse_ret = parse_request();
 
-    //解析请求
-    PARSE_RESULT parse_ret = parse_request();
+        //状态分发
+        if(parse_ret==PARSE_RESULT::INCOMPLETE){//未完成
+            reset_oneshot(m_epoll_fd, m_socket_fd);
+            return;
+        }else if(parse_ret==PARSE_RESULT::OK){   //成功
+            int status_code = do_request();
+            generate_response(status_code);
+        }else if(parse_ret==PARSE_RESULT::SYNTAX_ERROR){  //语法错误
+            generate_response(400);
+        }
 
-    //根据解析结果创建发送响应或继续等待
-    if(parse_ret==PARSE_RESULT::INCOMPLETE){//未完成
-        reset_oneshot(m_epoll_fd, m_socket_fd);
-        return;
-    }else if(parse_ret==PARSE_RESULT::OK){   //成功
-        int status_code = do_request();
-        generate_response(status_code);
-    }else{  //语法错误
-        generate_response(400);
-    }
+        //发送响应
+        send_response();
 
-    //发送响应
-    send_response();
-
-    //重置 ONESHOT 或 关闭连接
-    if(parse_ret==PARSE_RESULT::OK && m_keep_alive){   //成功
-        init_request();//重置 http 请求状态
-        reset_oneshot(m_epoll_fd,m_socket_fd);
-    }else{  //出错或非长连接
-        close(m_socket_fd);
+        //处理长连接和粘包
+        if(m_keep_alive && parse_ret==PARSE_RESULT::OK){
+            int unparsed_len = m_read_idx-m_parse_idx;//未解析长度
+            char tmp_buf[READ_BUFFER_SIZE];//临时缓存区
+            if(unparsed_len>0){//未解析完
+                memcpy(tmp_buf,m_read_buf+m_parse_idx,unparsed_len);
+            }   
+            init_request();//重置 HTTP 状态机
+            if(unparsed_len>0){//未解析完
+                memcpy(m_read_buf,tmp_buf,unparsed_len);
+                m_read_idx = unparsed_len;
+                continue; //继续解析
+            }else{//解析完毕
+                reset_oneshot(m_epoll_fd,m_socket_fd);
+                return;
+            }
+        }else{  //出错或非长连接
+            close(m_socket_fd);
+            return;
+        }
     }
    
 };
@@ -271,7 +285,7 @@ HttpConn::LINE_RESULT HttpConn::parse_one_line(){
                 m_read_buf[m_parse_idx++] = '\0';
                 return LINE_RESULT::OK;
             }
-            return LINE_RESULT::SYTAX_ERROR;
+            return LINE_RESULT::SYNTAX_ERROR;
         }
     }
     return LINE_RESULT::INCOMPLETE; //没找到 '\r''\n'

@@ -36,7 +36,7 @@ private:
     void reset_oneshot(int epoll_fd,int socket_fd);//重置 oneshot 事件
     
 //parse_request 调用
-    enum class LINE_RESULT{OK,INCOMPLETE,SYTAX_ERROR}; //行解析的状态
+    enum class LINE_RESULT{OK,INCOMPLETE,SYNTAX_ERROR}; //行解析的状态
     LINE_RESULT parse_one_line();//解析出一行
     PARSE_RESULT parse_request_line(char* text);//解析请求行
     PARSE_RESULT parse_header(char* text);//解析请求头
