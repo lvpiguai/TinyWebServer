@@ -22,7 +22,7 @@ private:
     int m_close_log;
     std::mutex m_mutex;
     int m_count;
-    BlockQueue<std::string>* m_log_queue;
+    std::unique_ptr<BlockQueue<std::string>> m_log_queue;
     FILE* m_fp;
     int m_max_lines;
     static void* write_worker(void* args);

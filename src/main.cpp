@@ -3,7 +3,7 @@
 int main(int argc, char const *argv[])
 {
     WebServer server;
-    server.init(9000,5);
+    server.init(9000,4);
     server.start();
     
     return 0;

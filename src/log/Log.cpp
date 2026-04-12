@@ -4,6 +4,7 @@
 #include<cstdio>
 #include<cstring>
 #include <ctime>
+#include <memory>
 #include <mutex>
 #include <string>
 #include<sys/time.h>
@@ -21,16 +22,13 @@ Log::~Log(){
     if(m_fp){
         fclose(m_fp);
     }
-    if(m_log_queue){
-        delete m_log_queue;
-    }
 }
 
 bool Log::init(const char* file_full_path,int close_log,int max_queue_size,int max_lines_per_file){
     //异步
     if(max_queue_size>=1){
         m_is_async = true;
-        m_log_queue = new BlockQueue<std::string>(max_queue_size);
+        m_log_queue =  std::make_unique<BlockQueue<std::string>>(max_queue_size);
         pthread_t tid;
         pthread_create(&tid,nullptr,write_worker,nullptr);
     }
@@ -124,6 +122,7 @@ void Log::write_log(int level, const char* format, ...){
     locker.unlock();//解锁
     //推入队列 || 写入磁盘
     if(m_is_async && m_log_queue->push(log_str))return; 
+    //队列满 || 本身就是异步
     std::lock_guard<std::mutex>lock_guard(m_mutex);
     fputs(log_str.c_str(),m_fp);
 }
